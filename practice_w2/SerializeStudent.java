@@ -26,9 +26,9 @@ public class SerializeStudent {
             int maxStudent = new Random().nextInt(20) + 1;
             for (int i = 0; i < maxStudent; i++) {
                 studentList.add(new Student(
-                        new Random().nextInt(11),
-                        new Random().nextInt(11),
-                        new Random().nextInt(11)));
+                        new Random().nextDouble(11),
+                        new Random().nextDouble(11),
+                        new Random().nextDouble(11)));
             }
             for (Student s : studentList)
                 oos.writeObject(s);
