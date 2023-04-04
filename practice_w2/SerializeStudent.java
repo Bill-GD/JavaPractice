@@ -30,10 +30,10 @@ public class SerializeStudent {
                         new Random().nextDouble(11),
                         new Random().nextDouble(11)));
             }
-            // for (Student s : studentList)
+            for (Student s : studentList)
+                oos.writeObject(s);
             // a collection of serializable objects is a serializable object
-            oos.writeObject(studentList);
-            // studentList = null;
+            // oos.writeObject(studentList); -> will change what will be read
             oos.flush();
             oos.close();
             fos.close();
