@@ -3,7 +3,7 @@ package practice_w2;
 import java.io.*;
 
 class Point implements Serializable {
-    private double x, y;
+    double x, y;
 
     Point() {
         x = y = 0;
@@ -14,37 +14,8 @@ class Point implements Serializable {
         this.y = y;
     }
 
-    void setX(double x) {
-        this.x = x;
-    }
-
-    void setY(double y) {
-        this.y = y;
-    }
-
-    double getX() {
-        return x;
-    }
-
-    double getY() {
-        return y;
-    }
-
-    void setCoords(double x, double y) {
-        this.x = x;
-        this.y = y;
-    }
-
     void showCoords() {
         System.out.println("(" + x + ", " + y + ")");
-    }
-
-    double distanceTo(Point p) {
-        return Math.sqrt(Math.pow(p.x - this.x, 2) + Math.pow(p.y - this.y, 2));
-    }
-
-    double distanceTo(double x, double y) {
-        return Math.sqrt(Math.pow(x - this.x, 2) + Math.pow(y - this.y, 2));
     }
 }
 
