@@ -18,6 +18,7 @@ class Student implements Serializable {
 public class SerializeStudent {
     public static void main(String[] args) {
         try {
+            // create streams for serialization
             FileOutputStream fos = new FileOutputStream("./students.txt");
             ObjectOutputStream oos = new ObjectOutputStream(fos);
 
@@ -32,7 +33,9 @@ public class SerializeStudent {
             for (Student s : studentList)
                 oos.writeObject(s);
             studentList = null;
+            fos.close();
 
+            // create streams for deserialization
             FileInputStream fis = new FileInputStream("./students.txt");
             ObjectInputStream ois = new ObjectInputStream(fis);
 
@@ -40,6 +43,7 @@ public class SerializeStudent {
             for (int i = 0; i < maxStudent; i++)
                 studentArray[i] = (Student) ois.readObject();
 
+            // sort
             for (int i = 0; i < maxStudent - 1; i++)
                 for (int j = 0; j < maxStudent - i - 1; j++)
                     if (studentArray[j].average >= studentArray[j + 1].average) {
@@ -47,9 +51,16 @@ public class SerializeStudent {
                         studentArray[j] = studentArray[j + 1];
                         studentArray[j + 1] = t;
                     }
-            for (Student s : studentArray)
-                System.out.println(s.average);
 
+            // new streams for serialization
+            fos = new FileOutputStream("./sxsv.dat");
+            oos = new ObjectOutputStream(fos);
+            for (Student s : studentArray) {
+                oos.writeObject(s);
+                System.out.println(s.average);
+            }
+
+            fos.close();
             oos.close();
             ois.close();
         } catch (Exception e) {
