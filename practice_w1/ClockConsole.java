@@ -20,7 +20,7 @@ public class ClockConsole {
                 System.out.print("Time: " + (hour < 10 ? ("0" + hour) : hour) + ":"
                         + (minute < 10 ? ("0" + minute) : minute) + ":"
                         + (second < 10 ? ("0" + second) : second));
-                Thread.currentThread().sleep(1000);
+                Thread.sleep(1000);
             } catch (Exception e) {
                 System.out.println(e.toString());
                 return;
