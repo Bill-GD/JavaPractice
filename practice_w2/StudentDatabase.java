@@ -16,19 +16,21 @@ public class StudentDatabase {
                     "create table if not exists SinhVien (MaSV int, TenSV varchar(50), Khoa varchar(50));");
             statement.executeUpdate("delete from SinhVien");
 
-            int maxRecordCount = 10;
+            int maxRecordCount = 20;
             for (int i = 0; i < maxRecordCount; i++) {
                 String name = Character.toString((char) (i + 65));
-                String insertStatement = "insert into SinhVien values (" + (i + 1) + ", '" + name + "', 'CNTT')";
+                String major = (i % 3 == 0 || i % 7 == 0) ? "CNTT" : "Biology";
+
+                String insertStatement = "insert into SinhVien values (" + (i + 1) + ", '" + name + "', '" + major + "')";
                 // use executeUpdate for all update statements
                 statement.executeUpdate(insertStatement);
-                System.out.println("Inserted (" + (i + 1) + ", '" + name + "', 'CNTT')");
+                System.out.println("Inserted (" + (i + 1) + ", '" + name + "', '" + major + "')");
             }
 
-            int row = statement.executeUpdate("delete from SinhVien where MaSV=4 or MaSV=8");
+            int row = statement.executeUpdate("delete from SinhVien where MaSV=4");
             System.out.println("Deleted " + row + " record(s)");
 
-            String queryString = "select * from SinhVien";
+            String queryString = "select * from sinhvien where Khoa='CNTT';";
             System.out.println("Query: " + queryString);
             // use executeQuery for queries
             ResultSet resultSet = statement.executeQuery(queryString);
