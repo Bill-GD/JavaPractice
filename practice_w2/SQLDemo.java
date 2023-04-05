@@ -14,6 +14,7 @@ public class SQLDemo { // Save as "JdbcSelectTest.java"
 
                 // Step 2: Construct a 'Statement' object inside the Connection created
                 // Statement objects are used to send queries to SQL server
+                // Statement is also used for insert
                 Statement statement = connection.createStatement();) {
 
             // Step 3: Write a SQL query string. Execute the SQL query via the 'Statement'.
