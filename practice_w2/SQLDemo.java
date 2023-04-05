@@ -7,7 +7,7 @@ public class SQLDemo { // Save as "JdbcSelectTest.java"
         try (
                 // Step 1: Construct a database 'Connection' object
                 Connection connection = DriverManager.getConnection(
-                        "jdbc:mysql://localhost:3306/classicmodels?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC",
+                        "jdbc:mysql://localhost:3306/ebookshop?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC",
                         "root", "AMinecraftPlayer!"); // For MySQL only
                 // The format is:
                 // "jdbc:mysql://hostname:port/databaseName", "username", "password"
@@ -17,7 +17,7 @@ public class SQLDemo { // Save as "JdbcSelectTest.java"
                 Statement statement = connection.createStatement();) {
 
             // Step 3: Write a SQL query string. Execute the SQL query via the 'Statement'.
-            String strSelect = "select pa.customerNumber, pr.total, pa.paid from (select o. customerNumber, sum(od.quantityOrdered * od.priceEach) total from orderdetails od, orders o where o.orderNumber = od.orderNumber group by o.customerNumber) as pr, (select customerNumber, sum(amount) paid from payments group by customerNumber) as pa where pr.customerNumber = pa.customerNumber;";
+            String strSelect = "select title, price, qty from books";
             System.out.println("The SQL statement is: " + strSelect + "\n"); // Echo For debugging
 
             // The query result is returned in a 'ResultSet' object called 'resultSet'.
@@ -35,10 +35,10 @@ public class SQLDemo { // Save as "JdbcSelectTest.java"
                 // retrieve a cell in the row
                 // datatype var-name = <ResultSet>.<get<datatype>(<column-name>);
                 // <column-name> is the column in the query result
-                int customerNumber = resultSet.getInt("customerNumber");
-                double total = resultSet.getDouble("total");
-                double paid = resultSet.getDouble("paid");
-                System.out.println(customerNumber + ", " + total + ", " + paid);
+                String title = resultSet.getString("title"); // retrieve a 'String'-cell in the row
+                double price = resultSet.getDouble("price"); // retrieve a 'double'-cell in the row
+                int qty = resultSet.getInt("qty"); // retrieve a 'int'-cell in the row
+                System.out.println(title + ", " + price + ", " + qty);
                 ++rowCount;
             }
             System.out.println("Total number of records = " + rowCount);
