@@ -1,6 +1,11 @@
 package practice_w2;
 
-import java.sql.*;
+// mainly use DriverManager, Connection, Statement, ResultSet
+// import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
 public class StudentDatabase {
     public static void main(String[] args) {
@@ -18,9 +23,9 @@ public class StudentDatabase {
 
             int maxRecordCount = 500;
             for (int i = 0; i < maxRecordCount; i++) {
-                if (i + 33 >= 127)
+                if (i + 33 >= 127) // backspace char
                     break;
-                if (i + 33 == 39 || i + 33 == 92) {
+                if (i + 33 == 39 || i + 33 == 92) { // ' and \ -> cause error
                     continue;
                 }
                 String name = Character.toString((char) (i + 33));
