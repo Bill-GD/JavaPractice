@@ -17,6 +17,7 @@ public class IPClassFromHost {
         try {
             String address = InetAddress.getByName(args[0]).getHostAddress();
             System.out.println("Hostname: " + args[0] + "\nAddress: " + address);
+            // '.' in regex is special
             int addressOctet1 = Integer.parseInt(address.split("\\.")[0]);
             // int[] addressOctet = new int[4];
             // for (int i = 0; i < addressOctetString.length; i++)
