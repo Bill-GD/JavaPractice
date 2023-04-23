@@ -194,14 +194,14 @@ public class FileTransfer extends Frame {
         fileTransfer.setLocationRelativeTo(null);
         fileTransfer.setVisible(true);
     }
+}
 
-    class FileInfo implements Serializable {
-        String name;
-        long size;
+class FileInfo implements Serializable {
+    String name;
+    long size;
 
-        FileInfo(String name, long size) {
-            this.name = name;
-            this.size = size;
-        }
+    FileInfo(String name, long size) {
+        this.name = name;
+        this.size = size;
     }
 }
