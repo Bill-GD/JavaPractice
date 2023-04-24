@@ -9,6 +9,7 @@ public class FileTransfer extends Frame {
     Server server = null;
     static int windowX = 550, windowY = 350;
     boolean isServerOpened = false;
+    Clock clock = null;
 
     final static int MAX_PACKET_SIZE = 1024 * 32;
 
@@ -23,6 +24,10 @@ public class FileTransfer extends Frame {
                 if (server != null) {
                     server.stopServer();
                     server = null;
+                }
+                if (clock != null) {
+                    clock.stopClock();
+                    clock = null;
                 }
                 System.exit(0);
             }
@@ -133,6 +138,53 @@ public class FileTransfer extends Frame {
 
     }
 
+    class Clock extends Thread {
+        int second, hour, minute;
+        boolean isRunning = false;
+        String time = "";
+
+        Clock() {
+            second = minute = hour = 0;
+        }
+
+        public void run() {
+            isRunning = true;
+            while (isRunning) {
+                try {
+                    second++;
+                    if (second == 60) {
+                        second = 0;
+                        minute++;
+                    }
+                    if (minute == 60) {
+                        minute = 0;
+                        hour++;
+                    }
+                    if (hour == 24)
+                        hour = 0;
+                    time = String.format("%02ds", second);
+                    if (minute > 0)
+                        time = String.format("%02dm", minute) + time;
+                    if (hour > 0)
+                        time = String.format("%02dh", hour) + time;
+                    labelNotification
+                            .setText("Sending file... (" + time + ")");
+                    repaint();
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                }
+            }
+        }
+
+        public String getTime() {
+            return time;
+        }
+
+        public void stopClock() {
+            isRunning = false;
+        }
+    }
+
     class Client extends Thread {
         int port = 0, bindPort = 0;
         DatagramSocket socket;
@@ -154,7 +206,9 @@ public class FileTransfer extends Frame {
                     socket.close();
                     return;
                 }
-                labelNotification.setText("Sending file...");
+
+                clock = new Clock();
+                clock.start();
 
                 // process/send file metadata to send
                 long fileLength = fileToSend.length();
@@ -201,11 +255,13 @@ public class FileTransfer extends Frame {
                         destinationAddress,
                         port));
 
-                labelNotification.setText("Sent to " + destinationAddress.getHostAddress() + ':' + port);
+                labelNotification.setText("Sent to " + destinationAddress.getHostAddress() + ':' + port + " (" + clock.getTime() + ')');
 
                 fileToSend = null;
                 bis.close();
                 socket.close();
+                clock.stopClock();
+                clock = null;
             } catch (Exception ex) {
                 labelNotification.setText(ex.getMessage());
             }
