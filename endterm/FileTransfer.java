@@ -11,9 +11,9 @@ public class FileTransfer extends Frame {
     boolean isServerOpened = false;
     Clock clock = null;
 
-    final static int MAX_PACKET_SIZE = 1024 * 32;
+    final static int MAX_PACKET_SIZE = 1024 * 48;
 
-    Label labelNotification;
+    Label labelNotification, labelPacket;
     Button toggleServer;
     TextField hostInput, portInputClient, portInputServer;
     TextArea fileInput;
@@ -58,7 +58,7 @@ public class FileTransfer extends Frame {
         labelFile.setIgnoreRepaint(true);
         add(labelFile);
         fileInput = new TextArea("D:\\text.txt", 2, 200, TextArea.SCROLLBARS_VERTICAL_ONLY);
-        fileInput.setBounds(110, 110, 150, 60);
+        fileInput.setBounds(40, 140, 220, 60);
         fileInput.setIgnoreRepaint(true);
         add(fileInput);
 
@@ -70,7 +70,7 @@ public class FileTransfer extends Frame {
             if (dir != null && name != null)
                 fileInput.setText(dir + name);
         });
-        browseFile.setBounds(270, 110, 50, 30);
+        browseFile.setBounds(270, 140, 50, 30);
         browseFile.setIgnoreRepaint(true);
         add(browseFile);
 
@@ -79,17 +79,20 @@ public class FileTransfer extends Frame {
         buttonSend.addActionListener((e) -> {
             labelNotification.setText("");
             int port = Integer.parseInt(portInputClient.getText());
-            if (port < 0 || port > 65535) {
-                labelNotification.setText("Invalid port");
-                return;
-            }
+            if (port < 0 || port > 65535)
+                throw new NumberFormatException();
             try {
                 new Client(port).start();
             } catch (Exception ex) {
-                labelNotification.setText("Can't send");
+                if (ex instanceof NumberFormatException)
+                    labelNotification.setText("Invalid port");
+                if (ex instanceof SocketException)
+                    labelNotification.setText("Can't connect to port " + port);
+                if (ex instanceof IllegalThreadStateException)
+                    labelNotification.setText("Already sending file");
             }
         });
-        buttonSend.setBounds(110, 180, 50, 30);
+        buttonSend.setBounds(40, 210, 50, 30);
         buttonSend.setIgnoreRepaint(true);
         add(buttonSend);
 
@@ -112,17 +115,20 @@ public class FileTransfer extends Frame {
                     toggleServer.setLabel("Open Server");
                 } else {
                     int port = Integer.parseInt(portInputServer.getText());
-                    if (port < 0 || port > 65535) {
-                        labelNotification.setText("Invalid port");
-                        return;
-                    }
+                    if (port < 0 || port > 65535)
+                        throw new NumberFormatException();
                     server = new Server(port);
                     server.start();
                     isServerOpened = true;
                     toggleServer.setLabel("Close Server");
                 }
             } catch (Exception ex) {
-                labelNotification.setText(ex.getMessage());
+                if (ex instanceof NumberFormatException)
+                    labelNotification.setText("Invalid port");
+                if (ex instanceof SocketException)
+                    labelNotification.setText("Can't close server");
+                if (ex instanceof IllegalThreadStateException)
+                    labelNotification.setText("Server already started");
             }
         });
         toggleServer.setBounds(400, 80, 90, 30);
@@ -130,8 +136,12 @@ public class FileTransfer extends Frame {
         add(toggleServer);
 
         labelNotification = new Label("", Label.CENTER);
-        labelNotification.setBounds(0, windowY - 60, windowX, 50);
+        labelNotification.setBounds(0, windowY - 80, windowX, 30);
         add(labelNotification);
+
+        labelPacket = new Label("", Label.CENTER);
+        labelPacket.setBounds(0, windowY - 60, windowX, 30);
+        add(labelPacket);
     }
 
     public void paint(Graphics g) {
@@ -189,7 +199,7 @@ public class FileTransfer extends Frame {
         int port = 0, bindPort = 0;
         DatagramSocket socket;
 
-        public Client(int port) throws Exception {
+        public Client(int port) throws SocketException {
             this.port = port;
             this.bindPort = port > 1 ? port - 1 : port + 1;
             socket = new DatagramSocket(bindPort);
@@ -247,6 +257,8 @@ public class FileTransfer extends Frame {
                             MAX_PACKET_SIZE,
                             destinationAddress,
                             port));
+                    labelPacket.setText((i + 1) + " / " + numberOfPieces +
+                            String.format(" (%.1f", ((double) (i + 1) * 100 / numberOfPieces)) + "%)");
                     Thread.sleep(100);
                 }
                 socket.send(new DatagramPacket(
@@ -255,15 +267,17 @@ public class FileTransfer extends Frame {
                         destinationAddress,
                         port));
 
-                labelNotification.setText("Sent to " + destinationAddress.getHostAddress() + ':' + port + " (" + clock.getTime() + ')');
+                labelNotification.setText(
+                        "Sent to " + destinationAddress.getHostAddress() + ':' + port + " (" + clock.getTime() + ')');
 
                 fileToSend = null;
                 bis.close();
                 socket.close();
                 clock.stopClock();
                 clock = null;
+                labelPacket.setText("");
             } catch (Exception ex) {
-                labelNotification.setText(ex.getMessage());
+                labelNotification.setText("Problem occurred when sending file");
             }
         }
     }
@@ -273,6 +287,7 @@ public class FileTransfer extends Frame {
         DatagramSocket serverSocket;
         byte[] receiveData;
         boolean isRunning = true;
+        InetAddress address = null;
 
         public Server(int port) throws Exception {
             this.port = port;
@@ -288,9 +303,10 @@ public class FileTransfer extends Frame {
                 try {
                     receiveData = new byte[4096];
                     DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                    address = receivePacket.getAddress();
                     serverSocket.receive(receivePacket);
 
-                    System.out.println("Received packet: " + receivePacket.getAddress().getHostAddress() + ':' + port);
+                    labelNotification.setText("Receiving file...");
 
                     // process the metadata received
                     ObjectInputStream ois = new ObjectInputStream(
@@ -305,21 +321,26 @@ public class FileTransfer extends Frame {
                     BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(filepath));
                     receiveData = new byte[MAX_PACKET_SIZE];
 
-                    for (int i = 0; i < (fileInfo.numberOfPackets - 1); i++) {
+                    int i = 0;
+                    for (i = 0; i < (fileInfo.numberOfPackets - 1); i++) {
                         receivePacket = new DatagramPacket(
                                 receiveData,
-                                receiveData.length);
+                                receiveData.length,
+                                address, port);
                         serverSocket.receive(receivePacket);
                         bos.write(receiveData, 0, MAX_PACKET_SIZE);
                     }
                     receivePacket = new DatagramPacket(
                             receiveData,
-                            receiveData.length);
+                            receiveData.length,
+                            address, port);
                     serverSocket.receive(receivePacket);
                     bos.write(receiveData, 0, fileInfo.lastByteLength);
                     bos.flush();
 
                     labelNotification.setText("Received file: " + filepath);
+                    labelPacket.setText("Received: "
+                            + (i + 1) + " / " + fileInfo.numberOfPackets);
                 } catch (Exception e) {
                     if (e instanceof SocketException)
                         labelNotification.setText("Server closed (" + port + ")");
