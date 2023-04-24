@@ -144,10 +144,6 @@ public class FileTransfer extends Frame {
         add(labelPacket);
     }
 
-    public void paint(Graphics g) {
-
-    }
-
     class Clock extends Thread {
         int second, hour, minute;
         boolean isRunning = false;
@@ -241,31 +237,23 @@ public class FileTransfer extends Frame {
                 socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, port));
 
                 // process/send & partition file content
-                byte[][] filePackets = new byte[numberOfPieces][MAX_PACKET_SIZE];
                 byte[] filePart = new byte[MAX_PACKET_SIZE];
 
                 BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToSend));
 
-                int count = 0;
+                int i = 0;
                 while (bis.read(filePart, 0, MAX_PACKET_SIZE) != -1) {
-                    filePackets[count++] = filePart;
-                    filePart = new byte[MAX_PACKET_SIZE];
-                }
-
-                for (int i = 0; i < (count - 1); i++) {
-                    socket.send(new DatagramPacket(filePackets[i],
+                    socket.send(new DatagramPacket(
+                            filePart,
                             MAX_PACKET_SIZE,
                             destinationAddress,
                             port));
                     labelPacket.setText((i + 1) + " / " + numberOfPieces +
                             String.format(" (%.1f", ((double) (i + 1) * 100 / numberOfPieces)) + "%)");
                     Thread.sleep(100);
+                    filePart = new byte[MAX_PACKET_SIZE];
+                    i++;
                 }
-                socket.send(new DatagramPacket(
-                        filePackets[count - 1],
-                        MAX_PACKET_SIZE,
-                        destinationAddress,
-                        port));
 
                 labelNotification.setText(
                         "Sent to " + destinationAddress.getHostAddress() + ':' + port + " (" + clock.getTime() + ')');
