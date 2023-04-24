@@ -10,6 +10,8 @@ public class FileTransfer extends Frame {
     static int windowX = 550, windowY = 350;
     boolean isServerOpened = false;
 
+    final static int MAX_PACKET_SIZE = 1024 * 32;
+
     Label labelNotification;
     Button toggleServer;
     TextField hostInput, portInputClient, portInputServer;
@@ -59,7 +61,9 @@ public class FileTransfer extends Frame {
         browseFile.addActionListener((e) -> {
             FileDialog fileDialog = new FileDialog(this, "Choose file", FileDialog.LOAD);
             fileDialog.setVisible(true);
-            fileInput.setText(fileDialog.getDirectory() + fileDialog.getFile());
+            String dir = fileDialog.getDirectory(), name = fileDialog.getFile();
+            if (dir != null && name != null)
+                fileInput.setText(dir + name);
         });
         browseFile.setBounds(270, 110, 50, 30);
         browseFile.setIgnoreRepaint(true);
@@ -151,8 +155,19 @@ public class FileTransfer extends Frame {
                     return;
                 }
                 labelNotification.setText("Sending file...");
-                // process file metadata to send
-                FileInfo fileInfo = new FileInfo(fileToSend.getName(), fileToSend.length());
+
+                // process/send file metadata to send
+                long fileLength = fileToSend.length();
+                int numberOfPieces = (int) (fileLength / MAX_PACKET_SIZE);
+                int lastByteLength = (int) (fileLength % MAX_PACKET_SIZE);
+                if (lastByteLength > 0) {
+                    numberOfPieces++;
+                }
+                FileInfo fileInfo = new FileInfo(
+                        fileToSend.getName(),
+                        fileLength,
+                        numberOfPieces,
+                        lastByteLength);
 
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ObjectOutputStream oos = new ObjectOutputStream(baos);
@@ -161,18 +176,35 @@ public class FileTransfer extends Frame {
                 byte[] bytesToSend = baos.toByteArray();
                 socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, port));
 
-                // process file content to send
-                FileReader fr = new FileReader(fileToSend);
-                int c;
-                String contentToSend = "";
-                while ((c = fr.read()) != -1) {
-                    contentToSend += (char) c;
+                // process/send & partition file content
+                byte[][] filePackets = new byte[numberOfPieces][MAX_PACKET_SIZE];
+                byte[] filePart = new byte[MAX_PACKET_SIZE];
+
+                BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToSend));
+
+                int count = 0;
+                while (bis.read(filePart, 0, MAX_PACKET_SIZE) != -1) {
+                    filePackets[count++] = filePart;
+                    filePart = new byte[MAX_PACKET_SIZE];
                 }
-                fr.close();
-                bytesToSend = contentToSend.getBytes();
-                socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, port));
+
+                for (int i = 0; i < (count - 1); i++) {
+                    socket.send(new DatagramPacket(filePackets[i],
+                            MAX_PACKET_SIZE,
+                            destinationAddress,
+                            port));
+                    Thread.sleep(100);
+                }
+                socket.send(new DatagramPacket(
+                        filePackets[count - 1],
+                        MAX_PACKET_SIZE,
+                        destinationAddress,
+                        port));
 
                 labelNotification.setText("Sent to " + destinationAddress.getHostAddress() + ':' + port);
+
+                fileToSend = null;
+                bis.close();
                 socket.close();
             } catch (Exception ex) {
                 labelNotification.setText(ex.getMessage());
@@ -211,20 +243,27 @@ public class FileTransfer extends Frame {
 
                     String filepath = "D:\\Received_Files";
                     new File(filepath).mkdirs();
+                    filepath += "\\" + fileInfo.name;
 
                     // process file content received
-                    filepath += "\\" + fileInfo.name;
-                    FileWriter fw = new FileWriter(filepath);
+                    BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(filepath));
+                    receiveData = new byte[MAX_PACKET_SIZE];
 
-                    receiveData = new byte[(int) fileInfo.size + 1];
-                    receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                    for (int i = 0; i < (fileInfo.numberOfPackets - 1); i++) {
+                        receivePacket = new DatagramPacket(
+                                receiveData,
+                                receiveData.length);
+                        serverSocket.receive(receivePacket);
+                        bos.write(receiveData, 0, MAX_PACKET_SIZE);
+                    }
+                    receivePacket = new DatagramPacket(
+                            receiveData,
+                            receiveData.length);
                     serverSocket.receive(receivePacket);
+                    bos.write(receiveData, 0, fileInfo.lastByteLength);
+                    bos.flush();
 
-                    String message = new String(receivePacket.getData(), 0, receivePacket.getLength());
                     labelNotification.setText("Received file: " + filepath);
-                    fw.write(message);
-
-                    fw.flush();
                 } catch (Exception e) {
                     if (e instanceof SocketException)
                         labelNotification.setText("Server closed (" + port + ")");
@@ -253,9 +292,13 @@ public class FileTransfer extends Frame {
 class FileInfo implements Serializable {
     public String name;
     public long size;
+    int numberOfPackets;
+    int lastByteLength;
 
-    public FileInfo(String name, long size) {
+    public FileInfo(String name, long size, int numberOfPackets, int lastByteLength) {
         this.name = name;
         this.size = size;
+        this.numberOfPackets = numberOfPackets;
+        this.lastByteLength = lastByteLength;
     }
 }
