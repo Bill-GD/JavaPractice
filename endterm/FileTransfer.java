@@ -270,7 +270,7 @@ public class FileTransfer extends Frame {
                             destinationAddress,
                             port));
                     labelPacket.setText((i + 1) + " / " + numberOfPieces + " - " +
-                            formatFileSize((i + 1) * MAX_PACKET_SIZE) + " / " + formatFileSize(fileLength) +
+                            formatFileSize(i * MAX_PACKET_SIZE) + " / " + formatFileSize(fileLength) +
                             String.format(" (%.1f", ((double) (i + 1) * 100 / numberOfPieces)) + "%)");
                     Thread.sleep(100);
                     filePart = new byte[MAX_PACKET_SIZE];
