@@ -4,8 +4,10 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.*;
+import java.text.DecimalFormat;
 
 public class FileTransfer extends Frame {
+    // globally used variables
     Server server = null;
     static int windowX = 550, windowY = 350;
     boolean isServerOpened = false;
@@ -18,9 +20,10 @@ public class FileTransfer extends Frame {
     TextField hostInput, portInputClient, portInputServer;
     TextArea fileInput;
 
-    public FileTransfer(int mode) {
+    public FileTransfer() {
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
+                // stop the server & clock when the window is closed
                 if (server != null) {
                     server.stopServer();
                     server = null;
@@ -32,6 +35,7 @@ public class FileTransfer extends Frame {
                 System.exit(0);
             }
         });
+        // setup the UI
         setLayout(null);
 
         // client side
@@ -74,7 +78,6 @@ public class FileTransfer extends Frame {
         browseFile.setIgnoreRepaint(true);
         add(browseFile);
 
-        // send using the information given
         Button buttonSend = new Button("Send");
         buttonSend.addActionListener((e) -> {
             labelNotification.setText("");
@@ -110,9 +113,12 @@ public class FileTransfer extends Frame {
         toggleServer.addActionListener((e) -> {
             try {
                 if (isServerOpened) {
+                    if (server.isReceiving)
+                        throw new Exception();
                     server.stopServer();
                     isServerOpened = false;
                     toggleServer.setLabel("Open Server");
+                    labelPacket.setText("");
                 } else {
                     int port = Integer.parseInt(portInputServer.getText());
                     if (port < 0 || port > 65535)
@@ -125,16 +131,19 @@ public class FileTransfer extends Frame {
             } catch (Exception ex) {
                 if (ex instanceof NumberFormatException)
                     labelNotification.setText("Invalid port");
-                if (ex instanceof SocketException)
-                    labelNotification.setText("Can't close server");
-                if (ex instanceof IllegalThreadStateException)
+                else if (ex instanceof SocketException)
+                    labelNotification.setText("");
+                else if (ex instanceof IllegalThreadStateException)
                     labelNotification.setText("Server already started");
+                else
+                    labelNotification.setText("Receiving file. Can't close server");
             }
         });
         toggleServer.setBounds(400, 80, 90, 30);
         toggleServer.setIgnoreRepaint(true);
         add(toggleServer);
 
+        // neutral
         labelNotification = new Label("", Label.CENTER);
         labelNotification.setBounds(0, windowY - 80, windowX, 30);
         add(labelNotification);
@@ -142,6 +151,16 @@ public class FileTransfer extends Frame {
         labelPacket = new Label("", Label.CENTER);
         labelPacket.setBounds(0, windowY - 60, windowX, 30);
         add(labelPacket);
+    }
+
+    public static String formatFileSize(long bytes) {
+        if (bytes <= 0)
+            return "0B";
+        final String[] units = new String[] { "B", "KB", "MB", "GB", "TB" };
+
+        int digitGroups = (int) (Math.log(bytes) / Math.log(1024));
+
+        return new DecimalFormat("#,##0.#").format(bytes / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
     }
 
     class Clock extends Thread {
@@ -191,12 +210,14 @@ public class FileTransfer extends Frame {
         }
     }
 
+    // runs in a different thread to avoid blocking AWT
     class Client extends Thread {
         int port = 0, bindPort = 0;
         DatagramSocket socket;
 
         public Client(int port) throws SocketException {
             this.port = port;
+            // avoid overlapping port with server
             this.bindPort = port > 1 ? port - 1 : port + 1;
             socket = new DatagramSocket(bindPort);
         }
@@ -216,7 +237,7 @@ public class FileTransfer extends Frame {
                 clock = new Clock();
                 clock.start();
 
-                // process/send file metadata to send
+                // process/send file metadata
                 long fileLength = fileToSend.length();
                 int numberOfPieces = (int) (fileLength / MAX_PACKET_SIZE);
                 int lastByteLength = (int) (fileLength % MAX_PACKET_SIZE);
@@ -236,7 +257,7 @@ public class FileTransfer extends Frame {
                 byte[] bytesToSend = baos.toByteArray();
                 socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, port));
 
-                // process/send & partition file content
+                // partition & send file content
                 byte[] filePart = new byte[MAX_PACKET_SIZE];
 
                 BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fileToSend));
@@ -248,15 +269,18 @@ public class FileTransfer extends Frame {
                             MAX_PACKET_SIZE,
                             destinationAddress,
                             port));
-                    labelPacket.setText((i + 1) + " / " + numberOfPieces +
+                    labelPacket.setText((i + 1) + " / " + numberOfPieces + " - " +
+                            formatFileSize((i + 1) * MAX_PACKET_SIZE) + " / " + formatFileSize(fileLength) +
                             String.format(" (%.1f", ((double) (i + 1) * 100 / numberOfPieces)) + "%)");
                     Thread.sleep(100);
                     filePart = new byte[MAX_PACKET_SIZE];
                     i++;
                 }
 
-                labelNotification.setText(
-                        "Sent to " + destinationAddress.getHostAddress() + ':' + port + " (" + clock.getTime() + ')');
+                labelNotification.setText("Sent to "
+                        + destinationAddress.getHostAddress()
+                        + ':' + port
+                        + " (" + clock.getTime() + ')');
 
                 fileToSend = null;
                 bis.close();
@@ -270,11 +294,12 @@ public class FileTransfer extends Frame {
         }
     }
 
+    // runs in a different thread to avoid blocking AWT
     class Server extends Thread {
         int port;
         DatagramSocket serverSocket;
         byte[] receiveData;
-        boolean isRunning = true;
+        boolean isRunning = false, isReceiving = false;
         InetAddress address = null;
 
         public Server(int port) throws Exception {
@@ -294,7 +319,9 @@ public class FileTransfer extends Frame {
                     address = receivePacket.getAddress();
                     serverSocket.receive(receivePacket);
 
+                    isReceiving = true;
                     labelNotification.setText("Receiving file...");
+                    labelPacket.setText("");
 
                     // process the metadata received
                     ObjectInputStream ois = new ObjectInputStream(
@@ -310,25 +337,27 @@ public class FileTransfer extends Frame {
                     receiveData = new byte[MAX_PACKET_SIZE];
 
                     int i = 0;
-                    for (i = 0; i < (fileInfo.numberOfPackets - 1); i++) {
+                    for (i = 0; i < fileInfo.numberOfPackets; i++) {
                         receivePacket = new DatagramPacket(
                                 receiveData,
                                 receiveData.length,
                                 address, port);
                         serverSocket.receive(receivePacket);
-                        bos.write(receiveData, 0, MAX_PACKET_SIZE);
+
+                        labelPacket.setText((i + 1) + " / " + fileInfo.numberOfPackets + " - " +
+                                formatFileSize((i + 1) * MAX_PACKET_SIZE) + " / " + formatFileSize(fileInfo.size));
+
+                        bos.write(receiveData, 0, (i == fileInfo.numberOfPackets - 1)
+                                ? fileInfo.lastByteLength
+                                : MAX_PACKET_SIZE);
                     }
-                    receivePacket = new DatagramPacket(
-                            receiveData,
-                            receiveData.length,
-                            address, port);
-                    serverSocket.receive(receivePacket);
-                    bos.write(receiveData, 0, fileInfo.lastByteLength);
                     bos.flush();
 
                     labelNotification.setText("Received file: " + filepath);
                     labelPacket.setText("Received: "
-                            + (i + 1) + " / " + fileInfo.numberOfPackets);
+                            + i + " / " + fileInfo.numberOfPackets +
+                            " (" + formatFileSize(fileInfo.size) + ")");
+                    isReceiving = false;
                 } catch (Exception e) {
                     if (e instanceof SocketException)
                         labelNotification.setText("Server closed (" + port + ")");
@@ -345,7 +374,7 @@ public class FileTransfer extends Frame {
     }
 
     public static void main(String[] args) {
-        FileTransfer fileTransfer = new FileTransfer(1);
+        FileTransfer fileTransfer = new FileTransfer();
         fileTransfer.setSize(windowX, windowY);
         fileTransfer.setTitle("File Transfer (UDP)");
         fileTransfer.setResizable(false);
@@ -354,6 +383,7 @@ public class FileTransfer extends Frame {
     }
 }
 
+// stores file metadata
 class FileInfo implements Serializable {
     public String name;
     public long size;
