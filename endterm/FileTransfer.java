@@ -7,7 +7,7 @@ import java.net.*;
 
 public class FileTransfer extends Frame {
     Server server = null;
-    static int windowX = 450, windowY = 300;
+    static int windowX = 550, windowY = 350;
     boolean isServerOpened = false;
 
     Label labelNotification;
@@ -18,6 +18,10 @@ public class FileTransfer extends Frame {
     public FileTransfer(int mode) {
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
+                if (server != null) {
+                    server.stopServer();
+                    server = null;
+                }
                 System.exit(0);
             }
         });
@@ -25,34 +29,118 @@ public class FileTransfer extends Frame {
 
         // client side
         Label labelHostname = new Label("Hostname:");
-        labelHostname.setBounds(30, 50, 65, 20);
+        labelHostname.setBounds(40, 50, 65, 20);
+        labelHostname.setIgnoreRepaint(true);
         add(labelHostname);
         hostInput = new TextField("localhost");
-        hostInput.setBounds(100, 50, 150, 20);
+        hostInput.setBounds(110, 50, 150, 20);
+        hostInput.setIgnoreRepaint(true);
         add(hostInput);
 
         Label labelPort = new Label("Port:");
-        labelPort.setBounds(30, 80, 40, 20);
+        labelPort.setBounds(40, 80, 40, 20);
+        labelPort.setIgnoreRepaint(true);
         add(labelPort);
         portInputClient = new TextField("1000");
-        portInputClient.setBounds(100, 80, 70, 20);
+        portInputClient.setBounds(110, 80, 70, 20);
+        portInputClient.setIgnoreRepaint(true);
         add(portInputClient);
 
         Label labelFile = new Label("Filepath:");
-        labelFile.setBounds(30, 110, 60, 20);
+        labelFile.setBounds(40, 110, 60, 20);
+        labelFile.setIgnoreRepaint(true);
         add(labelFile);
         fileInput = new TextArea("D:\\text.txt", 2, 200, TextArea.SCROLLBARS_VERTICAL_ONLY);
-        fileInput.setBounds(100, 110, 150, 60);
+        fileInput.setBounds(110, 110, 150, 60);
+        fileInput.setIgnoreRepaint(true);
         add(fileInput);
+
+        Button browseFile = new Button("Browse");
+        browseFile.addActionListener((e) -> {
+            FileDialog fileDialog = new FileDialog(this, "Choose file", FileDialog.LOAD);
+            fileDialog.setVisible(true);
+            fileInput.setText(fileDialog.getDirectory() + fileDialog.getFile());
+        });
+        browseFile.setBounds(270, 110, 50, 30);
+        browseFile.setIgnoreRepaint(true);
+        add(browseFile);
 
         // send using the information given
         Button buttonSend = new Button("Send");
         buttonSend.addActionListener((e) -> {
             labelNotification.setText("");
             int port = Integer.parseInt(portInputClient.getText());
+            if (port < 0 || port > 65535) {
+                labelNotification.setText("Invalid port");
+                return;
+            }
             try {
-                int bindPort = port > 1 ? port - 1 : port + 1;
-                DatagramSocket socket = new DatagramSocket(bindPort);
+                new Client(port).start();
+            } catch (Exception ex) {
+                labelNotification.setText("Can't send");
+            }
+        });
+        buttonSend.setBounds(110, 180, 50, 30);
+        buttonSend.setIgnoreRepaint(true);
+        add(buttonSend);
+
+        // server side
+        Label labelPortServer = new Label("Port:");
+        labelPortServer.setBounds(360, 50, 30, 20);
+        labelPortServer.setIgnoreRepaint(true);
+        add(labelPortServer);
+        portInputServer = new TextField("1000");
+        portInputServer.setBounds(400, 50, 90, 20);
+        portInputServer.setIgnoreRepaint(true);
+        add(portInputServer);
+
+        toggleServer = new Button("Open Server");
+        toggleServer.addActionListener((e) -> {
+            try {
+                if (isServerOpened) {
+                    server.stopServer();
+                    isServerOpened = false;
+                    toggleServer.setLabel("Open Server");
+                } else {
+                    int port = Integer.parseInt(portInputServer.getText());
+                    if (port < 0 || port > 65535) {
+                        labelNotification.setText("Invalid port");
+                        return;
+                    }
+                    server = new Server(port);
+                    server.start();
+                    isServerOpened = true;
+                    toggleServer.setLabel("Close Server");
+                }
+            } catch (Exception ex) {
+                labelNotification.setText(ex.getMessage());
+            }
+        });
+        toggleServer.setBounds(400, 80, 90, 30);
+        toggleServer.setIgnoreRepaint(true);
+        add(toggleServer);
+
+        labelNotification = new Label("", Label.CENTER);
+        labelNotification.setBounds(0, windowY - 60, windowX, 50);
+        add(labelNotification);
+    }
+
+    public void paint(Graphics g) {
+
+    }
+
+    class Client extends Thread {
+        int port = 0, bindPort = 0;
+        DatagramSocket socket;
+
+        public Client(int port) throws Exception {
+            this.port = port;
+            this.bindPort = port > 1 ? port - 1 : port + 1;
+            socket = new DatagramSocket(bindPort);
+        }
+
+        public void run() {
+            try {
                 InetAddress destinationAddress = InetAddress.getByName(hostInput.getText());
 
                 File fileToSend = new File(fileInput.getText().replaceAll("\"", ""));
@@ -62,6 +150,7 @@ public class FileTransfer extends Frame {
                     socket.close();
                     return;
                 }
+                labelNotification.setText("Sending file...");
                 // process file metadata to send
                 FileInfo fileInfo = new FileInfo(fileToSend.getName(), fileToSend.length());
 
@@ -88,42 +177,7 @@ public class FileTransfer extends Frame {
             } catch (Exception ex) {
                 labelNotification.setText(ex.getMessage());
             }
-        });
-        buttonSend.setBounds(100, 180, 50, 30);
-        add(buttonSend);
-
-        // server side
-        Label labelPortServer = new Label("Port:");
-        labelPortServer.setBounds(280, 50, 30, 20);
-        add(labelPortServer);
-        portInputServer = new TextField("1000");
-        portInputServer.setBounds(320, 50, 90, 20);
-        add(portInputServer);
-
-        toggleServer = new Button("Open Server");
-        toggleServer.addActionListener((e) -> {
-            try {
-                if (isServerOpened) {
-                    server.stopServer();
-                    isServerOpened = false;
-                    toggleServer.setLabel("Open Server");
-                } else {
-                    int port = Integer.parseInt(portInputServer.getText());
-                    server = new Server(port);
-                    server.start();
-                    isServerOpened = true;
-                    toggleServer.setLabel("Close Server");
-                }
-            } catch (Exception ex) {
-                labelNotification.setText("Can't open server");
-            }
-        });
-        toggleServer.setBounds(320, 80, 90, 30);
-        add(toggleServer);
-
-        labelNotification = new Label("", Label.CENTER);
-        labelNotification.setBounds(0, windowY - 60, windowX, 50);
-        add(labelNotification);
+        }
     }
 
     class Server extends Thread {
@@ -197,10 +251,10 @@ public class FileTransfer extends Frame {
 }
 
 class FileInfo implements Serializable {
-    String name;
-    long size;
+    public String name;
+    public long size;
 
-    FileInfo(String name, long size) {
+    public FileInfo(String name, long size) {
         this.name = name;
         this.size = size;
     }
