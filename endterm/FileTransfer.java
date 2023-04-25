@@ -85,10 +85,12 @@ public class FileTransfer extends Frame {
             if (port < 0 || port > 65535)
                 throw new NumberFormatException();
             try {
-                new Client(port).start();
+                new Client(port, hostInput.getText()).start();
             } catch (Exception ex) {
                 if (ex instanceof NumberFormatException)
                     labelNotification.setText("Invalid port");
+                if (ex instanceof UnknownHostException)
+                    labelNotification.setText("Invalid host");
                 if (ex instanceof SocketException)
                     labelNotification.setText("Can't connect to port " + port);
                 if (ex instanceof IllegalThreadStateException)
@@ -132,7 +134,7 @@ public class FileTransfer extends Frame {
                 if (ex instanceof NumberFormatException)
                     labelNotification.setText("Invalid port");
                 else if (ex instanceof SocketException)
-                    labelNotification.setText("");
+                    labelNotification.setText("Can't open server on specified port");
                 else if (ex instanceof IllegalThreadStateException)
                     labelNotification.setText("Server already started");
                 else
@@ -212,20 +214,18 @@ public class FileTransfer extends Frame {
 
     // runs in a different thread to avoid blocking AWT
     class Client extends Thread {
-        int port = 0, bindPort = 0;
+        int destinationPort = 0;
         DatagramSocket socket;
+        InetAddress destinationAddress;
 
-        public Client(int port) throws SocketException {
-            this.port = port;
-            // avoid overlapping port with server
-            this.bindPort = port > 1 ? port - 1 : port + 1;
-            socket = new DatagramSocket(bindPort);
+        public Client(int destinationPort, String destinationIP) throws Exception {
+            this.destinationPort = destinationPort;
+            socket = new DatagramSocket();
+            destinationAddress = InetAddress.getByName(destinationIP);
         }
 
         public void run() {
             try {
-                InetAddress destinationAddress = InetAddress.getByName(hostInput.getText());
-
                 File fileToSend = new File(fileInput.getText().replaceAll("\"", ""));
 
                 if (!fileToSend.exists()) {
@@ -255,7 +255,7 @@ public class FileTransfer extends Frame {
                 oos.writeObject(fileInfo);
 
                 byte[] bytesToSend = baos.toByteArray();
-                socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, port));
+                socket.send(new DatagramPacket(bytesToSend, bytesToSend.length, destinationAddress, destinationPort));
 
                 // partition & send file content
                 byte[] filePart = new byte[MAX_PACKET_SIZE];
@@ -268,7 +268,7 @@ public class FileTransfer extends Frame {
                             filePart,
                             MAX_PACKET_SIZE,
                             destinationAddress,
-                            port));
+                            destinationPort));
                     labelPacket.setText((i + 1) + " / " + numberOfPieces + " - " +
                             formatFileSize(i * MAX_PACKET_SIZE) + " / " + formatFileSize(fileLength) +
                             String.format(" (%.1f", ((double) (i + 1) * 100 / numberOfPieces)) + "%)");
@@ -279,7 +279,7 @@ public class FileTransfer extends Frame {
 
                 labelNotification.setText("Sent to "
                         + destinationAddress.getHostAddress()
-                        + ':' + port
+                        + ':' + destinationPort
                         + " (" + clock.getTime() + ')');
 
                 fileToSend = null;
@@ -340,8 +340,7 @@ public class FileTransfer extends Frame {
                     for (i = 0; i < fileInfo.numberOfPackets; i++) {
                         receivePacket = new DatagramPacket(
                                 receiveData,
-                                receiveData.length,
-                                address, port);
+                                receiveData.length);
                         serverSocket.receive(receivePacket);
 
                         labelPacket.setText((i + 1) + " / " + fileInfo.numberOfPackets + " - " +
