@@ -81,10 +81,10 @@ public class FileTransfer extends Frame {
         Button buttonSend = new Button("Send");
         buttonSend.addActionListener((e) -> {
             labelNotification.setText("");
-            int port = Integer.parseInt(portInputClient.getText());
-            if (port < 0 || port > 65535)
-                throw new NumberFormatException();
             try {
+                int port = Integer.parseInt(portInputClient.getText());
+                if (port < 0 || port > 65535)
+                    throw new NumberFormatException();
                 new Client(port, hostInput.getText()).start();
             } catch (Exception ex) {
                 if (ex instanceof NumberFormatException)
@@ -92,7 +92,7 @@ public class FileTransfer extends Frame {
                 if (ex instanceof UnknownHostException)
                     labelNotification.setText("Invalid host");
                 if (ex instanceof SocketException)
-                    labelNotification.setText("Can't connect to port " + port);
+                    labelNotification.setText("Can't connect to port");
                 if (ex instanceof IllegalThreadStateException)
                     labelNotification.setText("Already sending file");
             }
